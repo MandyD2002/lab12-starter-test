@@ -1,0 +1,69 @@
+name: AI review and docs
+
+# Reference workflow. Actions are pinned by commit SHA (not floating tags) so a
+# Marketplace bump can never silently change CI behaviour mid-semester. The
+# trailing comment records the human-readable version each SHA corresponds to;
+# re-pin and re-test before each run of the lab.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  pull-requests: write
+  contents: write          # needed to push regenerated docs
+
+jobs:
+  review:
+    runs-on: ubuntu-22.04   # pinned image, not ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # v4.1.7
+        with:
+          fetch-depth: 0    # need full history for diffs
+
+      - name: Set up Python
+        uses: actions/setup-python@39cd14951b08e74b54015e9e001cdefcf80e669f  # v5.1.1
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Generate diff
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git diff origin/${{ github.base_ref }}...HEAD > /tmp/pr.diff
+
+      - name: Run review agent
+        env:
+          HKBU_API_KEY: ${{ vars.HKBU_API_KEY }}
+        run: |
+          python review_agent/v1.py \
+            --diff /tmp/pr.diff \
+            --output /tmp/review.json \
+            --pr-id "${{ github.event.pull_request.number }}"
+
+      - name: Post comments
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/post_review_comments.py \
+            --review /tmp/review.json \
+            --pr ${{ github.event.pull_request.number }}
+
+      - name: Update docs
+        env:
+          HKBU_API_KEY: ${{ vars.HKBU_API_KEY }}
+        run: |
+          python doc_agent/agent.py --pkg src/ --out docs/
+          if git diff --quiet docs/; then
+            echo "No doc changes"
+          else
+            git config user.name "ai-doc-bot"
+            git config user.email "ai-doc-bot@example.com"
+            git add docs/
+            git commit -m "docs: regenerate from src/"
+            git push
+          fi
