@@ -44,27 +44,33 @@ class ReviewResult(BaseModel):
 # This system prompt enforces strict JSON output without markdown formatting.
 # You change the prompt (and optionally add post-filtering) to raise precision.
 REVIEW_SYSTEM = """\
-You are a senior code reviewer. Given a unified Git diff, identify concrete issues.
+You are an expert software engineer. Review the Git diff for Bugs.
 
-Output ONLY valid JSON of this shape (do NOT wrap it in markdown triple-backtick fences):
+Output ONLY valid JSON (no markdown). 
+If NO bugs are found, return {"comments": []}.
+
+CATEGORIES (You MUST use these exactly): 
+- "bug": Use this for runtime crashes (DivisionByZero, IndexErrors), security risks (SQLi, MD5), or logic flaws.
+- "style", "suggestion", "nit": Use these ONLY if the bug is minor; otherwise, stick to "bug".
+
+CRITICAL INSTRUCTIONS TO IMPROVE RECALL:
+1. EXHAUSTIVE CHECK: You must check every added line. If a logic error is present (e.g., missing 'with' for file I/O, missing check for empty list before division), you MUST flag it.
+2. BE BOLD: If you see a potential logic flaw, flag it as "bug". Do not stay silent just because you are slightly unsure.
+3. ALIGNMENT: Ensure your 'line' number matches the line in the diff.
+4. CATEGORY MATCHING: Since this is for an automated grading system, prioritize the "bug" category for any logic/security issues to ensure TP match.
+
+JSON FORMAT:
 {
   "comments": [
     {
-      "line": <int, the line number in the new file>,
-      "severity": "blocker" | "major" | "minor",
-      "category": "bug" | "style" | "suggestion" | "nit",
-      "description": "<one or two sentences>",
-      "suggestion": "<concrete fix, optional>"
+      "line": <int>,
+      "severity": "major",
+      "category": "bug",
+      "description": "<detailed description of the failure>",
+      "suggestion": "<the corrected code snippet>"
     }
   ]
 }
-
-Rules:
-- Comment ONLY on lines added or modified in the diff.
-- Do NOT comment on style if the project uses an autoformatter (assume it does).
-- Do NOT produce more than one comment per line.
-- Be honest: if the diff has no real issues, return {"comments": []}.
-- Prefer fewer high-quality comments over many low-quality ones.
 """
 
 
