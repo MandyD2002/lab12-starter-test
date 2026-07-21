@@ -45,14 +45,6 @@ jobs:
             --output /tmp/review.json \
             --pr-id "${{ github.event.pull_request.number }}"
 
-      - name: Post comments
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python scripts/post_review_comments.py \
-            --review /tmp/review.json \
-            --pr ${{ github.event.pull_request.number }}
-
       - name: Update docs
         env:
           HKBU_API_KEY: ${{ vars.HKBU_API_KEY }}
